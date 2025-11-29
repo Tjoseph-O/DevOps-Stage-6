@@ -60,37 +60,43 @@ jobs:
           sleep 30
           curl -f https://${{ secrets.DOMAIN_NAME }} || exit 1
 
-      - name: Send Success Notification
+      - name: Send Success Email
         if: success()
-        uses: dawidd6/action-send-mail@v3
+        uses: peter-evans/sendgrid-action@v1
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          from: ${{ secrets.SENDGRID_FROM_EMAIL }}
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
           subject: '✅ Application Deployed Successfully'
-          to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DevOps Stage 6 CI/CD <${{ secrets.EMAIL_USERNAME }}>
-          body: |
-            Application has been successfully deployed.
+          html: |
+            <h2>✅ Application Deployment Successful</h2>
+            <p>Your TODO application has been successfully deployed.</p>
             
-            URL: https://${{ secrets.DOMAIN_NAME }}
-            Commit: ${{ github.sha }}
+            <h3>Details:</h3>
+            <ul>
+              <li><strong>Commit:</strong> ${{ github.sha }}</li>
+              <li><strong>Application URL:</strong> <a href="https://${{ secrets.DOMAIN_NAME }}">https://${{ secrets.DOMAIN_NAME }}</a></li>
+            </ul>
             
-            View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run Details →</a></p>
 
-      - name: Send Failure Notification
+      - name: Send Failure Email
         if: failure()
-        uses: dawidd6/action-send-mail@v3
+        uses: peter-evans/sendgrid-action@v1
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: '❌ Application Deployment Failed'
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          from: ${{ secrets.SENDGRID_FROM_EMAIL }}
           to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DevOps Stage 6 CI/CD <${{ secrets.EMAIL_USERNAME }}>
-          body: |
-            Application deployment failed.
+          subject: '❌ Application Deployment Failed'
+          html: |
+            <h2>❌ Deployment Failed</h2>
+            <p>Application deployment encountered an error.</p>
             
-            View logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs →</a></p>
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://${{ secrets.DOMAIN_NAME }}" >> $GITHUB_STEP_SUMMARY

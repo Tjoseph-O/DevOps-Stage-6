@@ -71,9 +71,13 @@ jobs:
           elif [ $exitcode -eq 2 ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
             echo "⚠️ Infrastructure drift detected!"
+            echo "### ⚠️ Infrastructure Drift Detected" >> $GITHUB_STEP_SUMMARY
+            echo "Manual approval required before applying changes" >> $GITHUB_STEP_SUMMARY
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
             echo "✅ No changes needed"
+            echo "### ✅ No Infrastructure Changes" >> $GITHUB_STEP_SUMMARY
+            echo "Infrastructure matches configuration" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Save Plan
@@ -91,32 +95,34 @@ jobs:
     if: needs.terraform-plan.outputs.has_changes == 'true'
     
     steps:
-      - name: Send Email Notification
-        uses: dawidd6/action-send-mail@v3
+      - name: Send Email via SendGrid
+        uses: peter-evans/sendgrid-action@v1
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: '⚠️ Infrastructure Drift Detected - Approval Required'
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          from: ${{ secrets.SENDGRID_FROM_EMAIL }}
           to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DevOps Stage 6 CI/CD <${{ secrets.EMAIL_USERNAME }}>
-          body: |
-            Infrastructure drift has been detected in the TODO Microservices application.
+          subject: '⚠️ Infrastructure Drift Detected - Approval Required'
+          html: |
+            <h2>⚠️ Infrastructure Drift Detected</h2>
+            <p>Changes have been detected in your TODO Microservices infrastructure.</p>
             
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Triggered by: ${{ github.actor }}
+            <h3>Details:</h3>
+            <ul>
+              <li><strong>Repository:</strong> ${{ github.repository }}</li>
+              <li><strong>Branch:</strong> ${{ github.ref_name }}</li>
+              <li><strong>Commit:</strong> ${{ github.sha }}</li>
+              <li><strong>Triggered by:</strong> ${{ github.actor }}</li>
+            </ul>
             
-            Changes detected in Terraform plan. Manual approval required before applying changes.
+            <h3>Action Required:</h3>
+            <p>Manual approval is required before applying infrastructure changes.</p>
+            <ol>
+              <li>Review the Terraform plan</li>
+              <li>Go to the <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">GitHub Actions run</a></li>
+              <li>Click "Review deployments" and approve</li>
+            </ol>
             
-            To approve and apply changes:
-            1. Go to: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            2. Review the Terraform plan
-            3. Click "Review deployments" and approve
-            
-            View full run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Full Run →</a></p>
 
   wait-for-approval:
     name: Wait for Manual Approval
@@ -128,7 +134,10 @@ jobs:
     
     steps:
       - name: Approval checkpoint
-        run: echo "✅ Deployment approved by ${{ github.actor }}"
+        run: |
+          echo "✅ Deployment approved by ${{ github.actor }}"
+          echo "### ✅ Approval Granted" >> $GITHUB_STEP_SUMMARY
+          echo "Approved by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
 
   terraform-apply:
     name: Terraform Apply
@@ -181,7 +190,8 @@ jobs:
         run: |
           SERVER_IP=$(terraform output -raw server_public_ip)
           echo "server_ip=$SERVER_IP" >> $GITHUB_OUTPUT
-          echo "Server IP: $SERVER_IP"
+          echo "### ✅ Infrastructure Applied" >> $GITHUB_STEP_SUMMARY
+          echo "- **Server IP**: $SERVER_IP" >> $GITHUB_STEP_SUMMARY
 
   ansible-deploy:
     name: Deploy Application with Ansible
@@ -224,21 +234,28 @@ jobs:
         run: |
           ansible-playbook -i inventories/hosts.ini playbook.yml
 
-      - name: Deployment Success Notification
-        uses: dawidd6/action-send-mail@v3
+      - name: Send Success Email
+        uses: peter-evans/sendgrid-action@v1
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: '✅ Infrastructure Deployment Successful'
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          from: ${{ secrets.SENDGRID_FROM_EMAIL }}
           to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DevOps Stage 6 CI/CD <${{ secrets.EMAIL_USERNAME }}>
-          body: |
-            Infrastructure changes have been successfully applied.
+          subject: '✅ Infrastructure Deployment Successful'
+          html: |
+            <h2>✅ Deployment Successful</h2>
+            <p>Infrastructure changes have been successfully applied and the application is deployed.</p>
             
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Deployment URL: https://${{ secrets.DOMAIN_NAME }}
+            <h3>Details:</h3>
+            <ul>
+              <li><strong>Repository:</strong> ${{ github.repository }}</li>
+              <li><strong>Branch:</strong> ${{ github.ref_name }}</li>
+              <li><strong>Application URL:</strong> <a href="https://${{ secrets.DOMAIN_NAME }}">https://${{ secrets.DOMAIN_NAME }}</a></li>
+            </ul>
             
-            View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run Details →</a></p>
+
+      - name: Deployment Summary
+        run: |
+          echo "### ✅ Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: Success" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://${{ secrets.DOMAIN_NAME }}" >> $GITHUB_STEP_SUMMARY
