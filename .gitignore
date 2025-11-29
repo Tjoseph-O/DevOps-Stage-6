@@ -1,0 +1,37 @@
+# Environment files
+.env
+*.env
+!.env.example
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfstate*
+infra/terraform/*.tfvars
+infra/terraform/.terraform.tfstate.lock.info
+
+# Ansible
+infra/ansible/inventories/hosts.ini
+
+# Secrets
+secrets/
+
+# SSH Keys
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+.history/
+
+# OS
+.DS_Store
+
+# Dependencies
+node_modules/
+__pycache__/
+target/
+
+# Docker
+.docker/
