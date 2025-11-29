@@ -31,6 +31,20 @@ jobs:
           chmod 400 ~/.ssh/devops-stage6-key.pem
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
+      - name: Create Ansible Inventory
+        run: |
+          mkdir -p infra/ansible/inventories
+          cat > infra/ansible/inventories/hosts.ini << INVENTORY
+          [app_servers]
+          todo-app ansible_host=${{ secrets.SERVER_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=$HOME/.ssh/devops-stage6-key.pem ansible_ssh_common_args='-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+          
+          [app_servers:vars]
+          ansible_python_interpreter=/usr/bin/python3
+          ansible_become_method=sudo
+          ansible_become=yes
+          domain_name=${{ secrets.DOMAIN_NAME }}
+          INVENTORY
+
       - name: Install Ansible
         run: |
           sudo apt-get update
@@ -56,7 +70,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: '✅ Application Deployed Successfully'
           to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DevOps Stage 6 CI/CD
+          from: DevOps Stage 6 CI/CD <${{ secrets.EMAIL_USERNAME }}>
           body: |
             Application has been successfully deployed.
             
@@ -75,7 +89,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: '❌ Application Deployment Failed'
           to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DevOps Stage 6 CI/CD
+          from: DevOps Stage 6 CI/CD <${{ secrets.EMAIL_USERNAME }}>
           body: |
             Application deployment failed.
             
