@@ -1,0 +1,82 @@
+
+name: Application Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - 'auth-api/**'
+      - 'todos-api/**'
+      - 'users-api/**'
+      - 'log-message-processor/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/application.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Application Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/devops-stage6-key.pem
+          chmod 400 ~/.ssh/devops-stage6-key.pem
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Deploy with Ansible
+        working-directory: ./infra/ansible
+        run: |
+          ansible-playbook -i inventories/hosts.ini playbook.yml --tags deploy
+
+      - name: Verify Deployment
+        run: |
+          sleep 30
+          curl -f https://${{ secrets.DOMAIN_NAME }} || exit 1
+
+      - name: Send Success Notification
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '✅ Application Deployed Successfully'
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: DevOps Stage 6 CI/CD
+          body: |
+            Application has been successfully deployed.
+            
+            URL: https://${{ secrets.DOMAIN_NAME }}
+            Commit: ${{ github.sha }}
+            
+            View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Send Failure Notification
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '❌ Application Deployment Failed'
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: DevOps Stage 6 CI/CD
+          body: |
+            Application deployment failed.
+            
+            View logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
