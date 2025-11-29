@@ -1,0 +1,23 @@
+---
+docker_compose_version: "2.24.0"
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+required_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - python3-pip
+  - python3-setuptools
+  - software-properties-common
+
+python_docker_packages:
+  - docker
+  - docker-compose

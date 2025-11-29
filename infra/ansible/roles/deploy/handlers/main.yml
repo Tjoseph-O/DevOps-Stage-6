@@ -1,0 +1,18 @@
+---
+- name: Restart Docker Compose
+  community.docker.docker_compose:
+    project_src: "{{ app_directory }}"
+    state: present
+    restarted: yes
+  become_user: "{{ app_user }}"
+
+- name: Rebuild Docker Images
+  community.docker.docker_compose:
+    project_src: "{{ app_directory }}"
+    build: yes
+    pull: yes
+  become_user: "{{ app_user }}"
+
+- name: Docker System Prune
+  command: docker system prune -af
+  become_user: "{{ app_user }}"

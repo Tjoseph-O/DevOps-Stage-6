@@ -1,0 +1,133 @@
+
+---
+- name: Ensure application directory exists
+  file:
+    path: "{{ app_directory }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+  tags:
+    - deploy
+    - setup
+
+- name: Check if git repository exists
+  stat:
+    path: "{{ app_directory }}/.git"
+  register: git_repo_exists
+  tags:
+    - deploy
+    - git
+
+- name: Clone application repository (first time)
+  git:
+    repo: "{{ app_repo_url }}"
+    dest: "{{ app_directory }}"
+    version: "{{ app_repo_branch }}"
+    force: yes
+  become_user: "{{ app_user }}"
+  when: not git_repo_exists.stat.exists
+  register: code_cloned
+  tags:
+    - deploy
+    - git
+
+- name: Pull latest changes from repository
+  git:
+    repo: "{{ app_repo_url }}"
+    dest: "{{ app_directory }}"
+    version: "{{ app_repo_branch }}"
+    force: yes
+    update: yes
+  become_user: "{{ app_user }}"
+  when: git_repo_exists.stat.exists
+  register: git_pull
+  tags:
+    - deploy
+    - git
+
+- name: Set code_changed fact
+  set_fact:
+    code_changed: "{{ code_cloned.changed or (git_pull.changed | default(false)) }}"
+  tags:
+    - deploy
+
+- name: Generate .env file from template
+  template:
+    src: env.j2
+    dest: "{{ app_directory }}/.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0644'
+  register: env_file_changed
+  tags:
+    - deploy
+    - config
+
+- name: Check if docker-compose.yml exists
+  stat:
+    path: "{{ app_directory }}/docker-compose.yml"
+  register: compose_file
+  tags:
+    - deploy
+    - docker
+
+- name: Stop existing containers if changes detected
+  shell: docker compose down
+  args:
+    chdir: "{{ app_directory }}"
+  become_user: "{{ app_user }}"
+  when: (code_changed or env_file_changed.changed) and compose_file.stat.exists
+  ignore_errors: true
+  tags:
+    - deploy
+    - docker
+
+- name: Build Docker images
+  shell: docker compose build --no-cache
+  args:
+    chdir: "{{ app_directory }}"
+  become_user: "{{ app_user }}"
+  when: (code_changed or env_file_changed.changed) and compose_file.stat.exists
+  register: docker_build
+  tags:
+    - deploy
+    - docker
+    - build
+
+- name: Start Docker Compose services
+  shell: docker compose up -d
+  args:
+    chdir: "{{ app_directory }}"
+  become_user: "{{ app_user }}"
+  when: compose_file.stat.exists
+  register: docker_compose_result
+  tags:
+    - deploy
+    - docker
+
+- name: Wait for services to start
+  pause:
+    seconds: 30
+  when: docker_compose_result.changed
+  tags:
+    - deploy
+    - docker
+
+- name: Get running containers
+  command: docker compose ps
+  args:
+    chdir: "{{ app_directory }}"
+  become_user: "{{ app_user }}"
+  register: compose_ps
+  changed_when: false
+  tags:
+    - deploy
+    - verify
+
+- name: Display running services
+  debug:
+    var: compose_ps.stdout_lines
+  tags:
+    - deploy
+    - verify

@@ -1,0 +1,17 @@
+
+---
+- name: Deploy TODO Microservices Application
+  hosts: app_servers
+  become: true
+  
+  vars:
+    app_user: ubuntu
+    app_group: ubuntu
+    app_directory: /opt/todo-app
+    app_repo_url: "https://github.com/Tjoseph-O/DevOps-Stage-6.git"
+    app_repo_branch: main
+    acme_email: "admin@{{ domain_name }}"
+  
+  roles:
+    - dependencies
+    - deploy
